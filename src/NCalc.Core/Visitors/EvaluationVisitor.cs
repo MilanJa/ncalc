@@ -60,7 +60,7 @@ public class EvaluationVisitor(
             BinaryExpressionType.And => BoxedValues.Box(Convert.ToBoolean(args.LeftValue(), cultureInfo) && Convert.ToBoolean(args.RightValue(), cultureInfo)),
             BinaryExpressionType.Or => BoxedValues.Box(Convert.ToBoolean(args.LeftValue(), cultureInfo) || Convert.ToBoolean(args.RightValue(), cultureInfo)),
             BinaryExpressionType.Coalesce => args.LeftValue() ?? args.RightValue(),
-            _ => EvaluationVisitorHelper.EvaluateBinary(type, args.LeftValue(), args.RightValue(), options, cultureInfo)
+                _ => EvaluationVisitorHelper.EvaluateBinary(type, args.LeftValue(), args.RightValue(), options, cultureInfo)
         };
     }
 
@@ -71,7 +71,7 @@ public class EvaluationVisitor(
             BinaryExpressionType.And => BoxedValues.Box(Convert.ToBoolean(left.Accept(this), cultureInfo) && Convert.ToBoolean(right.Accept(this), cultureInfo)),
             BinaryExpressionType.Or => BoxedValues.Box(Convert.ToBoolean(left.Accept(this), cultureInfo) || Convert.ToBoolean(right.Accept(this), cultureInfo)),
             BinaryExpressionType.Coalesce => left.Accept(this) ?? right.Accept(this),
-            _ => EvaluationVisitorHelper.EvaluateBinary(type, left.Accept(this), right.Accept(this), options, cultureInfo)
+                _ => EvaluationVisitorHelper.EvaluateBinary(type, left.Accept(this), right.Accept(this), options, cultureInfo)
         };
     }
 
@@ -88,10 +88,12 @@ public class EvaluationVisitor(
         RuntimeHelpers.EnsureSufficientExecutionStack();
         var functionName = function.Identifier.Name;
         var hasHandler = context.EvaluateFunctionHandler != null || GetType() != typeof(EvaluationVisitor);
-        var hasCustomFunction = context.TryGetFunction(functionName, out var expressionFunction);
 
-        var asyncVisitor = (hasHandler || hasCustomFunction) ? CreateAsyncEvaluationVisitor() : null!;
+        ExpressionFunction? expressionFunction = null;
+        if (!hasHandler)
+            context.TryGetFunction(functionName, out expressionFunction);
 
+        var asyncVisitor = (hasHandler || expressionFunction != null) ? CreateAsyncEvaluationVisitor() : null;
         var functionData = new FunctionData(
             function.Identifier.Id,
             function.Parameters,
@@ -109,10 +111,12 @@ public class EvaluationVisitor(
 
             if (functionArgs.HasResult)
                 return functionArgs.Result;
+
+            context.TryGetFunction(functionName, out expressionFunction);
         }
 
-        if (hasCustomFunction)
-            return expressionFunction!(functionData);
+        if (expressionFunction != null)
+            return expressionFunction(functionData);
 
         return BuiltInFunctionHelper.Evaluate(functionName, functionData);
     }
